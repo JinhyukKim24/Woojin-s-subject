@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>비행기 슈팅 게임</title>
+    <style>
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background-color: black;
+        }
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const context = canvas.getContext('2d');
+
+        // 화면 크기를 최대화
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const backgroundImage = new Image();
+        backgroundImage.src = 'https://images.pexels.com/photos/110854/pexels-photo-110854.jpeg';
+
+        const playerWidth = 50;
+        const playerHeight = 60;
+        let playerX = canvas.width / 2 - playerWidth / 2;
+        let playerY = canvas.height - playerHeight - 10;
+        const playerSpeed = 5;
+        let playerHealth = 100;
+
+        const enemyWidth = 50;
+        const enemyHeight = 50;
+        const enemySpeed = 1.5; // 적 비행기 속도 감소
+        let enemies = [];
+
+        const bulletWidth = 5;
+        const bulletHeight = 10;
+        const bulletSpeed = 7;
+        let bullets = [];
+
+        let score = 0;
+        let keys = {};
+        let gameOver = false;
+
+        let mathQuestion = '';
+        let correctAnswer = 0;
+
+        document.addEventListener('keydown', function(e) {
+            keys[e.key] = true;
+            if (gameOver && e.key === 'Enter') {
+                resetGame();
+            }
+        });
+
+        document.addEventListener('keyup', function(e) {
+            keys[e.key] = false;
+        });
+
+        function generateMathQuestion() {
+            const operations = ['+', '-'];
+            const operation = operations[Math.floor(Math.random() * operations.length)];
+            let num1, num2;
+
+            if (operation === '+') {
+                num1 = Math.floor(Math.random() * 10) + 1;
+                num2 = Math.floor(Math.random() * 10) + 1;
+                correctAnswer = num1 + num2;
+            } else if (operation === '-') {
+                num1 = Math.floor(Math.random() * 10) + 1;
+                num2 = Math.floor(Math.random() * num1) + 1;
+                correctAnswer = num1 - num2;
+            }
+
+            mathQuestion = `${num1} ${operation} ${num2} = ?`;
+
+            // 정답과 오답 생성 (정답과 오답이 0 이하가 되지 않도록)
+            let answers = [correctAnswer];
+            while (answers.length < 3) {
+                let wrongAnswer;
+                do {
+                    wrongAnswer = Math.floor(Math.random() * 20) + 1; // 범위를 줄여서 난이도 낮춤
+                } while (wrongAnswer === correctAnswer || wrongAnswer <= 0);
+                answers.push(wrongAnswer);
+            }
+
+            // 적 비행기 생성 및 위치 무작위화
+            enemies = [];
+            const positions = [
+                canvas.width / 4 - enemyWidth / 2,
+                canvas.width / 2 - enemyWidth / 2,
+                (3 * canvas.width / 4) - enemyWidth / 2
+            ];
+            positions.sort(() => Math.random() - 0.5);
+
+            for (let i = 0; i < 3; i++) {
+                enemies.push({
+                    x: positions[i],
+                    y: -enemyHeight,
+                    answer: answers[i]
+                });
+            }
+        }
+
+        function resetGame() {
+            playerX = canvas.width / 2 - playerWidth / 2;
+            playerY = canvas.height - playerHeight - 10;
+            playerHealth = 100;
+            enemies = [];
+            bullets = [];
+            score = 0;
+            gameOver = false;
+            generateMathQuestion();
+            gameLoop();
+        }
+
+        function update() {
+            if (keys['ArrowLeft'] && playerX - playerSpeed > 0) {
+                playerX -= playerSpeed;
+            }
+            if (keys['ArrowRight'] && playerX + playerSpeed < canvas.width - playerWidth) {
+                playerX += playerSpeed;
+            }
+            if (keys['ArrowUp'] && playerY - playerSpeed > 0) {
+                playerY -= playerSpeed;
+            }
+            if (keys['ArrowDown'] && playerY + playerSpeed < canvas.height - playerHeight) {
+                playerY += playerSpeed;
+            }
+            if (keys[' ']) {
+                bullets.push({ x: playerX + playerWidth / 2 - bulletWidth / 2, y: playerY });
+                keys[' '] = false; // 총알이 한번만 나가도록 스페이스 키를 false로 변경
+            }
+
+            enemies.forEach(enemy => {
+                enemy.y += enemySpeed;
+            });
+
+            bullets = bullets.filter(bullet => {
+                bullet.y -= bulletSpeed;
+                return bullet.y > 0;
+            });
+
+            bullets.forEach(bullet => {
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (
+                        bullet.x < enemy.x + enemyWidth &&
+                        bullet.x + bulletWidth > enemy.x &&
+                        bullet.y < enemy.y + enemyHeight &&
+                        bullet.y + bulletHeight > enemy.y
+                    ) {
+                        if (enemy.answer === correctAnswer) {
+                            score += 10;
+                            enemies = []; // 정답을 맞추면 모든 적 제거
+                            generateMathQuestion();
+                        } else {
+                            playerHealth -= 10;
+                        }
+                        bullets.splice(bullets.indexOf(bullet), 1);
+                        enemies.splice(enemyIndex, 1);
+                    }
+                });
+            });
+
+            if (playerHealth <= 0) {
+                gameOver = true;
+            }
+
+            enemies = enemies.filter(enemy => enemy.y < canvas.height);
+
+            // 모든 적 비행기가 제거된 경우 새로운 문제 생성
+            if (enemies.length === 0 && !gameOver) {
+                generateMathQuestion();
+            }
+        }
+
+        function draw() {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+
+            // 플레이어 그리기
+            context.fillStyle = 'yellow';
+            context.fillRect(playerX, playerY, playerWidth, playerHeight);
+
+            // 적 그리기
+            enemies.forEach(enemy => {
+                context.fillStyle = 'red';
+                context.fillRect(enemy.x, enemy.y, enemyWidth, enemyHeight);
+                context.fillStyle = 'white';
+                context.font = '20px Arial';
+                context.fillText(enemy.answer, enemy.x + enemyWidth / 4, enemy.y + enemyHeight / 1.5);
+            });
+
+            // 총알 그리기
+            context.fillStyle = 'cyan';
+            bullets.forEach(bullet => {
+                context.fillRect(bullet.x, bullet.y, bulletWidth, bulletHeight);
+            });
+
+            // 점수 표시
+            context.fillStyle = 'white';
+            context.font = '20px Arial';
+            context.fillText('Score: ' + score, 10, 20);
+
+            // 수학 문제 표시
+            context.fillText(mathQuestion, canvas.width - 200, 20);
+
+            // 체력 게이지 표시
+            context.fillStyle = 'green';
+            context.fillRect(10, 40, playerHealth * 2, 20); // 체력 바 길이를 200px로 설정 (playerHealth * 2)
+            context.strokeStyle = 'white';
+            context.strokeRect(10, 40, 200, 20); // 체력 바 외곽선 그리기
+
+            // 게임 오버 메시지
+            if (gameOver) {
+                context.fillStyle = 'white';
+                context.font = '40px Arial';
+                context.fillText('Game Over! Press Enter to Restart', canvas.width / 2 - 250, canvas.height / 2);
+            }
+        }
+
+        function gameLoop() {
+            if (!gameOver) {
+                update();
+                draw();
+                requestAnimationFrame(gameLoop);
+            } else {
+                draw();
+            }
+        }
+
+        backgroundImage.onload = function() {
+            // 초기 수학 문제 생성
+            generateMathQuestion();
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
